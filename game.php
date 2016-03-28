@@ -42,8 +42,7 @@ for($round = 1; $round <= $number_of_rounds; $round++) {
             print_roll($dice);
 
             echo "Please select one die to save: " . PHP_EOL;
-            $status_update = read_and_record_die_selection($dice,
-                $saved_dice_this_roll, $number_of_saved_dice);
+            $status_update = play($player, $dice, $saved_dice_this_roll, $number_of_saved_dice);
             $roll_again = $status_update['roll_again'];
             $saved_dice_this_roll = $status_update['saved_dice_this_roll'];
             $number_of_saved_dice = $status_update['number_of_saved_dice'];
@@ -51,8 +50,7 @@ for($round = 1; $round <= $number_of_rounds; $round++) {
             // Have the player either keep selecting dice, or roll again, represents a single roll
             while(!$roll_again && $number_of_saved_dice < $dice_per_round) {
                 echo "Type ROLL, to roll remaining dice, or select another die to save:" . PHP_EOL;
-                $status_update = read_and_record_die_selection($dice,
-                    $saved_dice_this_roll, $number_of_saved_dice);
+                $status_update = play($player, $dice, $saved_dice_this_roll, $number_of_saved_dice);
                 $roll_again = $status_update['roll_again'];
                 $saved_dice_this_roll = $status_update['saved_dice_this_roll'];
                 $number_of_saved_dice = $status_update['number_of_saved_dice'];
@@ -90,6 +88,26 @@ function read_stdin()
         return $input;                  // return the text entered
 }
 
+function play($player_name, $dice, $already_saved_dice_this_roll, $total_saved_dice) {
+    switch($player_name) {
+        case 'RandBot':
+            return random_bot($dice, $already_saved_dice_this_roll, $total_saved_dice);
+            break;
+        case 'AllBot':
+            return all_bot($dice, $already_saved_dice_this_roll, $total_saved_dice);
+            break;
+        case 'CheatBot':
+            return cheat_bot($dice, $already_saved_dice_this_roll, $total_saved_dice);
+            break;
+        case 'SmartBot':
+            return smart_bot($dice, $already_saved_dice_this_roll, $total_saved_dice);
+            break;
+        default:
+            return read_and_record_die_selection($dice,
+                $already_saved_dice_this_roll, $total_saved_dice);
+    }
+}
+
 // Prompt for user command and return updated status info
 function read_and_record_die_selection($dice, $already_saved_dice_this_roll, $total_saved_dice) {
     $die_selected = read_stdin();
@@ -110,6 +128,89 @@ function read_and_record_die_selection($dice, $already_saved_dice_this_roll, $to
         return array('roll_again' => False,
                 'saved_dice_this_roll' => $already_saved_dice_this_roll,
                 'number_of_saved_dice' => $total_saved_dice + 1);
+    }
+}
+
+// Bot that randomly selects a single die per roll
+function random_bot($dice, $already_saved_dice_this_roll, $total_saved_dice) {
+    if(!empty($already_saved_dice_this_roll)) {
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice);
+    } else {
+        $die_selected =  rand(0, count($dice) - 1);
+        echo 'Selected Die Number ' . $die_selected . PHP_EOL;
+        $already_saved_dice_this_roll[$die_selected] = $dice[$die_selected];
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice + 1);
+    }
+}
+
+// Bot that selects all dice
+function all_bot($dice, $already_saved_dice_this_roll, $total_saved_dice) {
+    if(!empty($already_saved_dice_this_roll)) {
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice);
+    } else {
+        for($i = 0; $i < count($dice); $i++) {
+            echo 'Selected Die Number ' . $i . PHP_EOL;
+            $already_saved_dice_this_roll[$i] = $dice[$i];
+        }
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice + count($already_saved_dice_this_roll));
+    }
+}
+
+// Bot that only selects 4s. Can roll all die again if there are no 4s
+function cheat_bot($dice, $already_saved_dice_this_roll, $total_saved_dice) {
+    if(!empty($already_saved_dice_this_roll)) {
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice);
+    } else {
+        for($i = 0; $i < count($dice); $i++) {
+            if($dice[$i] == 4) {
+                echo 'Selected Die Number ' . $i . PHP_EOL;
+                $already_saved_dice_this_roll[$i] = $dice[$i];
+            }
+        }
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice + count($already_saved_dice_this_roll));
+    }
+}
+
+// Bot that either selects the lowest die, or all die with value of 1, 2, or 4
+// which is less than the expected value of any single roll is 2.833
+function smart_bot($dice, $already_saved_dice_this_roll, $total_saved_dice) {
+    if(!empty($already_saved_dice_this_roll)) {
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice);
+    } else {
+        $lowest_die = array('id' => -1, 'value' => PHP_INT_MAX);
+        for($i = 0; $i < count($dice); $i++) {
+            if($dice[$i] < $lowest_die['value']) {
+                $lowest_die = array('id' => $i, 'value' => $dice[$i]);
+            }
+
+            if($dice[$i] == 4 || $dice[$i] == 1 || $dice[$i] == 2) {
+                echo 'Selected Die Number ' . $i . PHP_EOL;
+                $already_saved_dice_this_roll[$i] = $dice[$i];
+            }
+        }
+
+        if(empty($already_saved_dice_this_roll)) {
+            echo 'Selected Die Number ' . $lowest_die['id'] . PHP_EOL;
+            $already_saved_dice_this_roll[$lowest_die['id']] = $dice[$lowest_die['id']];
+        }
+
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice + count($already_saved_dice_this_roll));
     }
 }
 
