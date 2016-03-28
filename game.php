@@ -1,10 +1,12 @@
 <?php
 
+// Game constants
 $sides_of_die = 6;
 $number_of_players = 4;
 $number_of_rounds = $number_of_players;
 $dice_per_round = 5;
 
+// Have players enter info
 $players = array();
 for ($i = 1; $i <= $number_of_players; $i++) {
     echo "Please enter Player " . $i . "'s name: " . PHP_EOL;
@@ -22,29 +24,38 @@ for ($i = 1; $i <= $number_of_players; $i++) {
 // Randomly set the order or the players, and thus who starts
 shuffle_assoc($players);
 
+// Play the game
 for($round = 1; $round <= $number_of_rounds; $round++) {
-
     foreach($players as $player => $score) {
         echo PHP_EOL . "########################################" . PHP_EOL;
         echo $player . "'s turn!!!" . PHP_EOL;
 
-        $saved_dice = 0;
+        $number_of_saved_dice = 0;
 
-        while($saved_dice < $dice_per_round) {
+        // Continue until the player rolls all dice, this represents a round
+        while($number_of_saved_dice < $dice_per_round) {
             $saved_dice_this_roll = array();
 
             echo PHP_EOL . "Roll!!!" . PHP_EOL;
-            $dice_to_roll = $dice_per_round - $saved_dice;
-            $dice = roll_dice($dice_to_roll);
+            $dice_to_roll = $dice_per_round - $number_of_saved_dice;
+            $dice = roll_dice($dice_to_roll, $sides_of_die);
             print_roll($dice);
 
             echo "Please select one die to save: " . PHP_EOL;
-            read_and_record_die_selection($dice_to_roll, True);
+            $status_update = read_and_record_die_selection($dice,
+                $saved_dice_this_roll, $number_of_saved_dice);
+            $roll_again = $status_update['roll_again'];
+            $saved_dice_this_roll = $status_update['saved_dice_this_roll'];
+            $number_of_saved_dice = $status_update['number_of_saved_dice'];
 
-            $done = False;
-            while(!$done && $saved_dice < $dice_per_round) {
-                echo "Type ROLL, to roll the remaining dice, or select another die to save:" . PHP_EOL;
-                read_and_record_die_selection($dice_to_roll, False);
+            // Have the player either keep selecting dice, or roll again, represents a single roll
+            while(!$roll_again && $number_of_saved_dice < $dice_per_round) {
+                echo "Type ROLL, to roll remaining dice, or select another die to save:" . PHP_EOL;
+                $status_update = read_and_record_die_selection($dice,
+                    $saved_dice_this_roll, $number_of_saved_dice);
+                $roll_again = $status_update['roll_again'];
+                $saved_dice_this_roll = $status_update['saved_dice_this_roll'];
+                $number_of_saved_dice = $status_update['number_of_saved_dice'];
             }
 
             $players[$player] += sum_dice($saved_dice_this_roll);
@@ -63,6 +74,8 @@ for($round = 1; $round <= $number_of_rounds; $round++) {
         print_r($players);
     }
 }
+
+// Sort the players by score so we can show the final tally in order
 asort($players);
 echo "Final Scores!!!" . PHP_EOL;
 print_r($players);
@@ -77,22 +90,30 @@ function read_stdin()
         return $input;                  // return the text entered
 }
 
-function read_and_record_die_selection($dice_to_roll, $firstRoll) {
+// Prompt for user command and return updated status info
+function read_and_record_die_selection($dice, $already_saved_dice_this_roll, $total_saved_dice) {
     $die_selected = read_stdin();
 
-    while(!is_valid_die($dice_to_roll, $die_selected) && ($firstRoll || !is_roll_string($die_selected))) {
+    // Keep prompting until the user provides a valid entry
+    while(!is_valid_die($die_selected, count($dice), $already_saved_dice_this_roll)
+            && (empty($already_saved_dice_this_roll) || !is_roll_string($die_selected))) {
         echo "That is not a valid selection, please try another: " . PHP_EOL;
         $die_selected = read_stdin();
     }
 
     if(is_roll_string($die_selected)) {
-        $GLOBALS['done'] = True;
+        return array('roll_again' => True,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice);
     } else {
-        $GLOBALS['saved_dice']++;
-        $GLOBALS['saved_dice_this_roll'][$die_selected] = $GLOBALS['dice'][$die_selected];
+        $already_saved_dice_this_roll[$die_selected] = $dice[$die_selected];
+        return array('roll_again' => False,
+                'saved_dice_this_roll' => $already_saved_dice_this_roll,
+                'number_of_saved_dice' => $total_saved_dice + 1);
     }
 }
 
+// Randomize the order of  an array while keeping the keys
 function shuffle_assoc(&$array) {
     $keys = array_keys($array);
 
@@ -107,20 +128,21 @@ function shuffle_assoc(&$array) {
     return true;
 }
 
-function is_valid_die($number_of_dice_rolled, $input) {
+// Valid die's identifier must exist and have not been already selected in this roll
+function is_valid_die($input, $number_of_dice_rolled, $already_saved_dice_this_roll) {
     return ctype_digit($input) 
             && 0 <= $input && $input < $number_of_dice_rolled 
-            && !array_key_exists($input, $GLOBALS['saved_dice_this_roll']);
+            && !array_key_exists($input, $already_saved_dice_this_roll);
 }
 
 function is_roll_string($input) {
     return strcasecmp($input, 'roll') == 0;
 }
 
-function roll_dice($numberOfDice) {
+function roll_dice($numberOfDice, $sides_of_die) {
     $dice = array();
     for($i = 0; $i < $numberOfDice; $i++) {
-        array_push($dice, rand(1, $GLOBALS['sides_of_die']));
+        array_push($dice, rand(1, $sides_of_die));
     }
 
     return $dice;
